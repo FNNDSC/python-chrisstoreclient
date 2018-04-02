@@ -22,7 +22,7 @@ setup(
       install_requires =   ['requests==2.18.4', 'collection-json==0.1.1'],
       test_suite       =   'nose.collector',
       tests_require    =   ['nose'],
-      #scripts          =   [],
+      #scripts         =   [],
       license          =   'MIT',
       zip_safe=False
 )
