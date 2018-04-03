@@ -51,7 +51,7 @@ class StoreClient(object):
         try:
             r = requests.get(url,
                              params=params,
-                             auth=(self.username, self.username),
+                             auth=(self.username, self.password),
                              timeout=self.timeout)
         except (requests.exceptions.Timeout, requests.exceptions.RequestException) as e:
             raise StoreRequestException(str(e))
