@@ -7,7 +7,7 @@ represented by a list of dictionaries.
 import requests
 from collection_json import Collection
 
-from.exceptions import StoreRequestException
+from.exceptions import StoreRequestException, StoreErrorException
 
 
 class StoreClient(object):
@@ -44,6 +44,10 @@ class StoreClient(object):
         return self._get_plugins_from_paginated_collections(collection)
 
     def get_authenticated_user_plugins(self):
+        """
+        Get the information (descriptors and parameters) of the plugins owned by the
+        currently authenticated user.
+        """
         collection = self._get(self.store_url)
         return self._get_plugins_from_paginated_collections(collection)
 
@@ -119,6 +123,28 @@ class StoreClient(object):
                              params=params,
                              auth=(self.username, self.password),
                              timeout=self.timeout)
+        except (requests.exceptions.Timeout, requests.exceptions.RequestException) as e:
+            raise StoreRequestException(str(e))
+        collection = Collection.from_json(r.text)
+        if collection.error:
+            raise StoreRequestException(collection.error.message)
+        return collection
+
+    def _post(self, url, params):
+        """
+        Internal method to make a GET request to the ChRIS store.
+        """
+        try:
+            descriptor_file_name = params['descriptor_file']
+            files = {'descriptor_file': open(descriptor_file_name, 'rb')}
+        except (KeyError, IOError) as e:
+            raise StoreRequestException(str(e))
+        data = params
+        del data['descriptor_file']
+        try:
+            r = requests.post(url, files=files, data=data,
+                              auth=(self.username, self.password),
+                              timeout=self.timeout)
         except (requests.exceptions.Timeout, requests.exceptions.RequestException) as e:
             raise StoreRequestException(str(e))
         collection = Collection.from_json(r.text)
