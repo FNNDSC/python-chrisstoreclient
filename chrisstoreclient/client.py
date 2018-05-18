@@ -1,5 +1,7 @@
 """
 ChRIS store API client module.
+An item in a collection is represented by a dictionary. A collection of items is
+represented by a list of dictionaries.
 """
 
 import requests
@@ -24,25 +26,89 @@ class StoreClient(object):
         Get a plugin's information (descriptors and parameters) given its ChRIS store
         name.
         """
-        plugin = {}
         search_params = {'name': plugin_name}
-        items = self._get(self.store_url + 'search/', search_params)
-        if items:
+        return self.get_plugins(**search_params)[0]
+
+    def get_plugins(self, **search_params):
+        """
+        Get the information (descriptors and parameters) of a list of plugins given
+        query search parameters. If no search parameters is given then returns all
+        plugins in the store.
+        """
+        if search_params:
+            collection = self._get(self.store_url + 'search/', search_params)
+        else:
+            collection = self._get(self.store_url)
+            all_plugins_url = self._get_link_relation_url(collection, 'all_plugins')
+            collection = self._get(all_plugins_url)
+        return self._get_plugins_from_paginated_collections(collection)
+
+    def get_authenticated_user_plugins(self):
+        collection = self._get(self.store_url)
+        return self._get_plugins_from_paginated_collections(collection)
+
+    def _get_plugins_from_paginated_collections(self, collection):
+        """
+        Internal method to get the information (descriptors and parameters) of a list of
+        plugins distributed into several collection pages.
+        """
+        plugins = []
+        while True:
+            plugins.extend(self._get_plugins_from_collection(collection))
+            next_page_url = self._get_link_relation_url(collection, 'next')
+            if next_page_url:
+                collection = self._get(next_page_url)
+            else:
+                break
+        return plugins
+
+    def _get_plugins_from_collection(self, collection):
+        """
+        Internal method to get the information (descriptors and parameters) of a list of
+        plugins in a collection.
+        """
+        plugins = []
+        items = collection.items
+        for item in items:
+            plugin = {}
             # collect the plugin's descriptors
-            item = items[0]
             for descriptor in item.data:
                 plugin[descriptor.name] = descriptor.value
-            # collect the plugin's parameters descriptors
-            params_url = [link for link in item.links if link.rel == 'parameters'][0].href
-            items = self._get(params_url)
-            params = []
-            for item in items:
-                param = {}
-                for descriptor in item.data:
-                    param[descriptor.name] = descriptor.value
-                params.append(param)
-            plugin['parameters'] = params
-        return plugin
+            # collect the plugin's parameters' descriptors
+            params_url = self._get_link_relation_url(item, 'parameters')
+            collection = self._get(params_url)
+            plugin['parameters'] = self._get_parameters_from_paginated_collections(collection)
+            plugins.append(plugin)
+        return plugins
+
+    def _get_parameters_from_paginated_collections(self, collection):
+        """
+        Internal method to get the information of a list of plugin parameters
+        distributed into several collection pages.
+        """
+        parameters = []
+        while True:
+            parameters.extend(self._get_parameters_from_collection(collection))
+            next_page_url = self._get_link_relation_url(collection, 'next')
+            if next_page_url:
+                collection = self._get(next_page_url)
+            else:
+                break
+        return parameters
+
+    def _get_parameters_from_collection(self, collection):
+        """
+        Internal method to get the information of a list of plugin parameters in a
+        collection.
+        """
+        items = collection.items
+        params = []
+        for item in items:
+            param = {}
+            for descriptor in item.data:
+                param[descriptor.name] = descriptor.value
+            params.append(param)
+        return params
 
     def _get(self, url, params=None):
         """
@@ -58,4 +124,15 @@ class StoreClient(object):
         collection = Collection.from_json(r.text)
         if collection.error:
             raise StoreRequestException(collection.error.message)
-        return collection.items
+        return collection
+
+    @staticmethod
+    def _get_link_relation_url(obj, relation_name):
+        """
+        Internal method to get the url of a link relation in a collection or item object.
+        """
+        url = None
+        links = [link for link in obj.links if link.rel == relation_name]
+        if links:
+            url = links[0].href
+        return url
