@@ -7,7 +7,7 @@ represented by a list of dictionaries.
 import requests
 from collection_json import Collection
 
-from.exceptions import StoreRequestException, StoreErrorException
+from.exceptions import StoreRequestException
 
 
 class StoreClient(object):
@@ -17,6 +17,7 @@ class StoreClient(object):
 
     def __init__(self, store_url, username, password, timeout=30):
         self.store_url = store_url
+        self.store_query_url = store_url + 'search/'
         self.username = username
         self.password = password
         self.timeout = timeout
@@ -27,16 +28,16 @@ class StoreClient(object):
         name.
         """
         search_params = {'name': plugin_name}
-        return self.get_plugins(**search_params)[0]
+        return self.get_plugins(**search_params)[0]  #plugin names are unique
 
     def get_plugins(self, **search_params):
         """
         Get the information (descriptors and parameters) of a list of plugins given
-        query search parameters. If no search parameters is given then returns all
+        query search parameters. If no search parameters is given then return all
         plugins in the store.
         """
         if search_params:
-            collection = self._get(self.store_url + 'search/', search_params)
+            collection = self._get(self.store_query_url, search_params)
         else:
             collection = self._get(self.store_url)
             all_plugins_url = self._get_link_relation_url(collection, 'all_plugins')
@@ -50,6 +51,38 @@ class StoreClient(object):
         """
         collection = self._get(self.store_url)
         return self._get_plugins_from_paginated_collections(collection)
+
+    def add_plugin(self, name, dock_image, descriptor_filename, public_repo):
+        """
+        Add a new plugin to the ChRIS store.
+        """
+        params = {'name': name, 'dock_image': dock_image,
+                  'public_repo': public_repo, 'descriptor_file': descriptor_filename}
+        url = self.store_url
+        self._post(url, params)
+
+    def modify_plugin(self, name, dock_image, descriptor_filename, public_repo,
+                      newname = ''):
+        """
+        Modify an existing plugin in the ChRIS store.
+        """
+        search_params = {'name': name}
+        collection = self._get(self.store_query_url, search_params)
+        url = collection.href
+        if newname:
+            name = newname
+        params = {'name': name, 'dock_image': dock_image, 'public_repo': public_repo,
+                  'descriptor_file': descriptor_filename}
+        self._put(url, params)
+
+    def delete_plugin(self, name):
+        """
+        Delete an existing plugin from the ChRIS store.
+        """
+        search_params = {'name': name}
+        collection = self._get(self.store_query_url, search_params)
+        url = collection.href
+        self._delete(url)
 
     def _get_plugins_from_paginated_collections(self, collection):
         """
@@ -125,14 +158,35 @@ class StoreClient(object):
                              timeout=self.timeout)
         except (requests.exceptions.Timeout, requests.exceptions.RequestException) as e:
             raise StoreRequestException(str(e))
-        collection = Collection.from_json(r.text)
-        if collection.error:
-            raise StoreRequestException(collection.error.message)
-        return collection
+        return self._get_collection_from_response(r)
 
     def _post(self, url, params):
         """
-        Internal method to make a GET request to the ChRIS store.
+        Internal method to make a POST request to the ChRIS store.
+        """
+        return self._post_put(requests.post, url, params)
+
+    def _put(self, url, params):
+        """
+        Internal method to make a PUT request to the ChRIS store.
+        """
+        return self._post_put(requests.put, url, params)
+
+    def _delete(self, url):
+        """
+        Internal method to make a DELETE request to the ChRIS store.
+        """
+        try:
+            r = requests.delete(url,
+                             auth=(self.username, self.password),
+                             timeout=self.timeout)
+        except (requests.exceptions.Timeout, requests.exceptions.RequestException) as e:
+            raise StoreRequestException(str(e))
+        return self._get_collection_from_response(r)
+
+    def _post_put(self, request_method, url, params):
+        """
+        Internal method to make either a POST or PUT request to the ChRIS store.
         """
         try:
             descriptor_file_name = params['descriptor_file']
@@ -142,12 +196,19 @@ class StoreClient(object):
         data = params
         del data['descriptor_file']
         try:
-            r = requests.post(url, files=files, data=data,
-                              auth=(self.username, self.password),
-                              timeout=self.timeout)
+            r = request_method(url, files=files, data=data,
+                               auth=(self.username, self.password),
+                               timeout=self.timeout)
         except (requests.exceptions.Timeout, requests.exceptions.RequestException) as e:
             raise StoreRequestException(str(e))
-        collection = Collection.from_json(r.text)
+        return self._get_collection_from_response(r)
+
+    @staticmethod
+    def _get_collection_from_response(response):
+        """
+        Internal method to get the collection object from a response object.
+        """
+        collection = Collection.from_json(response.text)
         if collection.error:
             raise StoreRequestException(collection.error.message)
         return collection
