@@ -68,7 +68,7 @@ class StoreClient(object):
         """
         search_params = {'name': name}
         collection = self._get(self.store_query_url, search_params)
-        url = collection.href
+        url = collection.items[0].href
         if newname:
             name = newname
         params = {'name': name, 'dock_image': dock_image, 'public_repo': public_repo,
@@ -81,7 +81,7 @@ class StoreClient(object):
         """
         search_params = {'name': name}
         collection = self._get(self.store_query_url, search_params)
-        url = collection.href
+        url = collection.items[0].href
         self._delete(url)
 
     def _get_plugins_from_paginated_collections(self, collection):
@@ -182,7 +182,6 @@ class StoreClient(object):
                              timeout=self.timeout)
         except (requests.exceptions.Timeout, requests.exceptions.RequestException) as e:
             raise StoreRequestException(str(e))
-        return self._get_collection_from_response(r)
 
     def _post_put(self, request_method, url, params):
         """
