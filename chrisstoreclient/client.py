@@ -28,7 +28,7 @@ class StoreClient(object):
         name.
         """
         search_params = {'name': plugin_name}
-        return self.get_plugins(**search_params)[0]  #plugin names are unique
+        return self.get_plugins(**search_params)[0]  # plugin names are unique
 
     def get_plugins(self, **search_params):
         """
@@ -40,7 +40,7 @@ class StoreClient(object):
             collection = self._get(self.store_query_url, search_params)
         else:
             collection = self._get(self.store_url)
-            all_plugins_url = self._get_link_relation_url(collection, 'all_plugins')
+            all_plugins_url = self._get_link_relation_urls(collection, 'all_plugins')[0]
             collection = self._get(all_plugins_url)
         return self._get_plugins_from_paginated_collections(collection)
 
@@ -92,9 +92,9 @@ class StoreClient(object):
         plugins = []
         while True:
             plugins.extend(self._get_plugins_from_collection(collection))
-            next_page_url = self._get_link_relation_url(collection, 'next')
-            if next_page_url:
-                collection = self._get(next_page_url)
+            next_page_urls = self._get_link_relation_urls(collection, 'next')
+            if next_page_urls:
+                collection = self._get(next_page_urls[0])
             else:
                 break
         return plugins
@@ -112,9 +112,12 @@ class StoreClient(object):
             for descriptor in item.data:
                 plugin[descriptor.name] = descriptor.value
             # collect the plugin's parameters' descriptors
-            params_url = self._get_link_relation_url(item, 'parameters')
-            collection = self._get(params_url)
-            plugin['parameters'] = self._get_parameters_from_paginated_collections(collection)
+            plugin['parameters'] = []
+            params_urls = self._get_link_relation_urls(item, 'parameters')
+            if params_urls:
+                collection = self._get(params_urls[0])
+                plugin['parameters'] = self._get_parameters_from_paginated_collections(
+                    collection)
             plugins.append(plugin)
         return plugins
 
@@ -126,9 +129,9 @@ class StoreClient(object):
         parameters = []
         while True:
             parameters.extend(self._get_parameters_from_collection(collection))
-            next_page_url = self._get_link_relation_url(collection, 'next')
-            if next_page_url:
-                collection = self._get(next_page_url)
+            next_page_urls = self._get_link_relation_urls(collection, 'next')
+            if next_page_urls:
+                collection = self._get(next_page_urls[0])
             else:
                 break
         return parameters
@@ -213,12 +216,9 @@ class StoreClient(object):
         return collection
 
     @staticmethod
-    def _get_link_relation_url(obj, relation_name):
+    def _get_link_relation_urls(obj, relation_name):
         """
-        Internal method to get the url of a link relation in a collection or item object.
+        Internal method to get the list of urls for a link relation in a collection or
+        item object.
         """
-        url = None
-        links = [link for link in obj.links if link.rel == relation_name]
-        if links:
-            url = links[0].href
-        return url
+        return [link.href for link in obj.links if link.rel == relation_name]
