@@ -32,9 +32,9 @@ class StoreClient(object):
 
     def get_plugins(self, **search_params):
         """
-        Get the information (descriptors and parameters) of a list of plugins given
-        query search parameters. If no search parameters is given then return all
-        plugins in the store.
+        Get the data (descriptors and parameters) of a list of plugins given query
+        search parameters. If no search parameters is given then return all plugins
+        in the store.
         """
         if search_params:
             collection = self._get(self.store_query_url, search_params)
@@ -42,15 +42,16 @@ class StoreClient(object):
             collection = self._get(self.store_url)
             all_plugins_url = self._get_link_relation_urls(collection, 'all_plugins')[0]
             collection = self._get(all_plugins_url)
-        return self._get_plugins_from_paginated_collections(collection)
+        # follow the 'parameters' link relation in each collection document
+        return self._get_items_from_paginated_collections(collection, ['parameters'])
 
     def get_authenticated_user_plugins(self):
         """
-        Get the information (descriptors and parameters) of the plugins owned by the
+        Get the data (descriptors and parameters) of the plugins owned by the
         currently authenticated user.
         """
         collection = self._get(self.store_url)
-        return self._get_plugins_from_paginated_collections(collection)
+        return self._get_items_from_paginated_collections(collection, ['parameters'])
 
     def add_plugin(self, name, dock_image, descriptor_filename, public_repo):
         """
@@ -84,71 +85,60 @@ class StoreClient(object):
         url = collection.items[0].href
         self._delete(url)
 
-    def _get_plugins_from_paginated_collections(self, collection):
+    def _get_items_from_paginated_collections(self, collection, follow_link_relations=[]):
         """
-        Internal method to get the information (descriptors and parameters) of a list of
-        plugins distributed into several collection pages.
+        Internal method to recursively get the data (descriptors and related item's
+        descriptors) of all the items in a linked list of paginated collections.
         """
-        plugins = []
+        if 'next' in follow_link_relations:
+            follow_link_relations.remove('next')
+        item_list = []
+        # get the collection documents from all pages
+        collections = self._get_paginated_collections(collection)
+        for collection in collections:
+            item_dict_list = []
+            items = collection.items
+            # for each item get its data and the data of all related items in a
+            # depth-first search
+            for item in items:
+                item_dict = self._get_item_descriptors(item)
+                for link_relation in follow_link_relations:
+                    related_urls = self._get_link_relation_urls(item, link_relation)
+                    if related_urls and (link_relation not in item_dict):
+                        item_dict[link_relation] = []
+                    for url in related_urls:
+                        coll = self._get(url)
+                        item_dict[link_relation].extend(
+                            self._get_items_from_paginated_collections(
+                                coll, follow_link_relations))
+                item_dict_list.append(item_dict)
+            item_list.extend(item_dict_list)
+        return item_list
+
+    def _get_item_descriptors(self, item):
+        """
+        Internal method to get an item's data (descriptors) in a dictionary.
+        """
+        item_dict = {}
+        # collect the item's descriptors
+        for descriptor in item.data:
+            item_dict[descriptor.name] = descriptor.value
+        return item_dict
+
+    def _get_paginated_collections(self, collection):
+        """
+        Internal method to get a list of paginated collection objects.
+        """
+        collections = []
         while True:
-            plugins.extend(self._get_plugins_from_collection(collection))
+            collections.append(collection)
             next_page_urls = self._get_link_relation_urls(collection, 'next')
             if next_page_urls:
+                # there is only a single next page
                 collection = self._get(next_page_urls[0])
             else:
                 break
-        return plugins
-
-    def _get_plugins_from_collection(self, collection):
-        """
-        Internal method to get the information (descriptors and parameters) of a list of
-        plugins in a collection.
-        """
-        plugins = []
-        items = collection.items
-        for item in items:
-            plugin = {}
-            # collect the plugin's descriptors
-            for descriptor in item.data:
-                plugin[descriptor.name] = descriptor.value
-            # collect the plugin's parameters' descriptors
-            plugin['parameters'] = []
-            params_urls = self._get_link_relation_urls(item, 'parameters')
-            if params_urls:
-                collection = self._get(params_urls[0])
-                plugin['parameters'] = self._get_parameters_from_paginated_collections(
-                    collection)
-            plugins.append(plugin)
-        return plugins
-
-    def _get_parameters_from_paginated_collections(self, collection):
-        """
-        Internal method to get the information of a list of plugin parameters
-        distributed into several collection pages.
-        """
-        parameters = []
-        while True:
-            parameters.extend(self._get_parameters_from_collection(collection))
-            next_page_urls = self._get_link_relation_urls(collection, 'next')
-            if next_page_urls:
-                collection = self._get(next_page_urls[0])
-            else:
-                break
-        return parameters
-
-    def _get_parameters_from_collection(self, collection):
-        """
-        Internal method to get the information of a list of plugin parameters in a
-        collection.
-        """
-        items = collection.items
-        params = []
-        for item in items:
-            param = {}
-            for descriptor in item.data:
-                param[descriptor.name] = descriptor.value
-            params.append(param)
-        return params
+        return collections
 
     def _get(self, url, params=None):
         """
