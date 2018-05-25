@@ -1,9 +1,11 @@
 
+import io
 import json
 from unittest import TestCase
 from unittest import mock
 
 from chrisstoreclient import client
+
 
 def _get(url, **kwargs):
     response_text = '{"collection":{"items":[{"links":[{"rel":"parameters",' \
@@ -30,7 +32,8 @@ def _get(url, **kwargs):
                          '{"value":200,"name":"min_memory_limit"},' \
                          '{"value":2147483647,"name":"max_memory_limit"},' \
                          '{"value":0,"name":"min_gpu_limit"},{"value":0,"name":"max_gpu_limit"}]}],' \
-                         '"links":[{"rel":"all_plugins","href":"http://localhost:8010/api/v1/plugins/"}],"href":"http://localhost:8010/api/v1/search/?name=simplefsapp",' \
+                         '"links":[{"rel":"all_plugins","href":"http://localhost:8010/api/v1/plugins/"}],' \
+                         '"href":"http://localhost:8010/api/v1/search/?name=simplefsapp",' \
                          '"version":"1.0"}}'
 
     parameter_response_text = '{"collection":{"items":[{"links":[{"rel":"plugin",' \
@@ -133,3 +136,67 @@ class StoreClientTests(TestCase):
                                               auth=(self.username, self.password),
                                               params=None, timeout=30)
 
+    def test_add_plugin(self):
+        """
+        Test whether add_plugin method sends the appropriate POST request to add a new
+        plugin.
+        """
+        with mock.patch.object(client.requests, 'post',
+                               return_value=_get(self.store_url)) as requests_post_mock:
+            with io.BytesIO(json.dumps(self.plugin_representation).encode()) as dfile:
+                self.client.add_plugin(self.plugin_name,
+                                       self.plugin_representation['dock_image'],
+                                       dfile,
+                                       self.plugin_representation['public_repo'])
+                data = {'name': self.plugin_name,
+                        'dock_image': self.plugin_representation['dock_image'],
+                        'public_repo': self.plugin_representation['public_repo']}
+                files = {'descriptor_file': dfile}
+                requests_post_mock.assert_called_with(self.store_url,
+                                                      files=files, data=data,
+                                                      auth=(self.username, self.password),
+                                                      timeout=30)
+
+    def test_modify_plugin(self):
+        """
+        Test whether modify_plugin method sends the appropriate PUT request to modify an
+        existing plugin.
+        """
+        with mock.patch.object(client.requests, 'put',
+                               return_value=_get(self.store_url)) as requests_put_mock:
+            with mock.patch.object(client.requests, 'get',
+                                   side_effect=_get) as requests_get_mock:
+                with io.BytesIO(json.dumps(self.plugin_representation).encode()) as dfile:
+                    self.client.modify_plugin(self.plugin_name,
+                                              self.plugin_representation['dock_image'],
+                                              dfile,
+                                              self.plugin_representation['public_repo'])
+                    data = {'name': self.plugin_name,
+                            'dock_image': self.plugin_representation['dock_image'],
+                            'public_repo': self.plugin_representation['public_repo']}
+                    files = {'descriptor_file': dfile}
+                    requests_get_mock.assert_called_with(self.client.store_query_url,
+                                                         auth=(self.username, self.password),
+                                                         params={'name': self.plugin_name},
+                                                         timeout=30)
+                    requests_put_mock.assert_called_with(self.store_url + '1/',
+                                                         files=files, data=data,
+                                                         auth=(self.username, self.password),
+                                                         timeout=30)
+
+    def test_delete_plugin(self):
+        """
+        Test whether delete_plugin method sends the appropriate DELETE request to delete
+        an existing plugin.
+        """
+        with mock.patch.object(client.requests, 'delete') as requests_delete_mock:
+            with mock.patch.object(client.requests, 'get',
+                                   side_effect=_get) as requests_get_mock:
+                self.client.delete_plugin(self.plugin_name)
+                requests_get_mock.assert_called_with(self.client.store_query_url,
+                                                     auth=(self.username, self.password),
+                                                     params={'name': self.plugin_name},
+                                                     timeout=30)
+                requests_delete_mock.assert_called_with(self.store_url + '1/',
+                                                        auth=(self.username, self.password),
+                                                        timeout=30)
