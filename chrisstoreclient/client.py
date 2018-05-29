@@ -75,9 +75,9 @@ class StoreClient(object):
         data = {'name': name, 'dock_image': dock_image, 'public_repo': public_repo}
         self._put(url, data, descriptor_file)
 
-    def delete_plugin(self, name):
+    def remove_plugin(self, name):
         """
-        Delete an existing plugin from the ChRIS store.
+        Remove an existing plugin from the ChRIS store.
         """
         search_params = {'name': name}
         collection = self._get(self.store_query_url, search_params)

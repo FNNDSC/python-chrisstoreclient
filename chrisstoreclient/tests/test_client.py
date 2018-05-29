@@ -184,15 +184,15 @@ class StoreClientTests(TestCase):
                                                          auth=(self.username, self.password),
                                                          timeout=30)
 
-    def test_delete_plugin(self):
+    def test_remove_plugin(self):
         """
-        Test whether delete_plugin method sends the appropriate DELETE request to delete
+        Test whether remove_plugin method sends the appropriate DELETE request to remove
         an existing plugin.
         """
         with mock.patch.object(client.requests, 'delete') as requests_delete_mock:
             with mock.patch.object(client.requests, 'get',
                                    side_effect=_get) as requests_get_mock:
-                self.client.delete_plugin(self.plugin_name)
+                self.client.remove_plugin(self.plugin_name)
                 requests_get_mock.assert_called_with(self.client.store_query_url,
                                                      auth=(self.username, self.password),
                                                      params={'name': self.plugin_name},
