@@ -42,8 +42,6 @@ class StoreClient(object):
             collection = self._get(self.store_query_url, search_params)
         else:
             collection = self._get(self.store_url)
-            all_plugins_url = self._get_link_relation_urls(collection, 'all_plugins')[0]
-            collection = self._get(all_plugins_url)
         # follow the 'parameters' link relation in each collection document
         return self._get_items_from_paginated_collections(collection, ['parameters'])
 

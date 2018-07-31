@@ -32,7 +32,7 @@ def _get(url, **kwargs):
                          '{"value":200,"name":"min_memory_limit"},' \
                          '{"value":2147483647,"name":"max_memory_limit"},' \
                          '{"value":0,"name":"min_gpu_limit"},{"value":0,"name":"max_gpu_limit"}]}],' \
-                         '"links":[{"rel":"all_plugins","href":"http://localhost:8010/api/v1/plugins/"}],' \
+                         '"links":[{"rel":"user_plugins","href":"http://localhost:8010/api/v1/plugins/"}],' \
                          '"href":"http://localhost:8010/api/v1/search/?name=simplefsapp",' \
                          '"version":"1.0"}}'
 
