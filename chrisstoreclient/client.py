@@ -15,7 +15,7 @@ class StoreClient(object):
     A ChRIS store API client.
     """
 
-    def __init__(self, store_url, username, password, timeout=30):
+    def __init__(self, store_url, username=None, password=None, timeout=30):
         self.store_url = store_url
         self.store_query_url = store_url + 'search/'
         self.username = username
@@ -142,10 +142,13 @@ class StoreClient(object):
         Internal method to make a GET request to the ChRIS store.
         """
         try:
-            r = requests.get(url,
-                             params=params,
-                             auth=(self.username, self.password),
-                             timeout=self.timeout)
+            if self.username or self.password:
+                r = requests.get(url,
+                                 params=params,
+                                 auth=(self.username, self.password),
+                                 timeout=self.timeout)
+            else:
+                r = requests.get(url, params=params, timeout=self.timeout)
         except (requests.exceptions.Timeout, requests.exceptions.RequestException) as e:
             raise StoreRequestException(str(e))
         return self._get_collection_from_response(r)
@@ -167,9 +170,12 @@ class StoreClient(object):
         Internal method to make a DELETE request to the ChRIS store.
         """
         try:
-            requests.delete(url,
-                            auth=(self.username, self.password),
-                            timeout=self.timeout)
+            if self.username or self.password:
+                requests.delete(url,
+                                auth=(self.username, self.password),
+                                timeout=self.timeout)
+            else:
+                requests.delete(url, timeout=self.timeout)
         except (requests.exceptions.Timeout, requests.exceptions.RequestException) as e:
             raise StoreRequestException(str(e))
 
@@ -179,9 +185,12 @@ class StoreClient(object):
         """
         files = {'descriptor_file': descriptor_file}
         try:
-            r = request_method(url, files=files, data=data,
-                               auth=(self.username, self.password),
-                               timeout=self.timeout)
+            if self.username or self.password:
+                r = request_method(url, files=files, data=data,
+                                   auth=(self.username, self.password),
+                                   timeout=self.timeout)
+            else:
+                r = request_method(url, files=files, data=data, timeout=self.timeout)
         except (requests.exceptions.Timeout, requests.exceptions.RequestException) as e:
             raise StoreRequestException(str(e))
         return self._get_collection_from_response(r)
