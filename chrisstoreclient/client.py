@@ -4,6 +4,7 @@ An item in a collection is represented by a dictionary. A collection of items is
 represented by a list of dictionaries.
 """
 
+import urllib.parse as urlparse
 import requests
 from collection_json import Collection
 
@@ -15,7 +16,7 @@ class StoreClient(object):
     A ChRIS store API client.
     """
 
-    def __init__(self, store_url, username, password, timeout=30):
+    def __init__(self, store_url, username=None, password=None, timeout=30):
         self.store_url = store_url
         self.store_query_url = store_url + 'search/'
         self.username = username
@@ -34,16 +35,20 @@ class StoreClient(object):
 
     def get_plugins(self, **search_params):
         """
-        Get the data (descriptors and parameters) of a list of plugins given query
-        search parameters. If no search parameters is given then return all plugins
-        in the store.
+        Get the data (descriptors) of a list of plugins given query search parameters.
+        If no search parameters is given then return the first page of plugins in the
+        store.
         """
         if search_params:
             collection = self._get(self.store_query_url, search_params)
         else:
-            collection = self._get(self.store_url)
-        # follow the 'parameters' link relation in each collection document
-        return self._get_items_from_paginated_collections(collection, ['parameters'])
+            collection = self._get(self.store_query_url)
+        response = {'items': self.get_items(collection)}
+        previous_lim = self.get_next_or_previous_collection_limits(collection, 'previous')
+        response.update(previous_lim)
+        next_lim = self.get_next_or_previous_collection_limits(collection, 'next')
+        response.update(next_lim)
+        return response
 
     def get_authenticated_user_plugins(self):
         """
@@ -112,6 +117,33 @@ class StoreClient(object):
             item_list.extend(item_dict_list)
         return item_list
 
+    def get_items(self, collection):
+        """
+        Get the data (descriptors) for all the items in a collection.
+        """
+        item_dict_list = []
+        for item in collection.items:
+            item_dict = self._get_item_descriptors(item)
+            item_dict_list.append(item_dict)
+        return item_dict_list
+
+    def get_next_or_previous_collection_limits(self, collection, next_or_previous):
+        """
+        Get the the offset and limit for the previous or next page from a collection if
+        they exist.
+        """
+        limits = {}
+        page_urls = self._get_link_relation_urls(collection, next_or_previous)
+        if page_urls:
+            # there can only be a single next or previous page
+            url = page_urls[0]
+            query_params = urlparse.parse_qs(urlparse.urlparse(url).query)
+            if 'offset' in query_params:
+                limits[next_or_previous] = query_params['offset'][0]
+            if 'limit' in query_params:
+                limits['limit'] = query_params['limit'][0]
+        return limits
+
     def _get_item_descriptors(self, item):
         """
         Internal method to get an item's data (descriptors) in a dictionary.
@@ -142,10 +174,13 @@ class StoreClient(object):
         Internal method to make a GET request to the ChRIS store.
         """
         try:
-            r = requests.get(url,
-                             params=params,
-                             auth=(self.username, self.password),
-                             timeout=self.timeout)
+            if self.username or self.password:
+                r = requests.get(url,
+                                 params=params,
+                                 auth=(self.username, self.password),
+                                 timeout=self.timeout)
+            else:
+                r = requests.get(url, params=params, timeout=self.timeout)
         except (requests.exceptions.Timeout, requests.exceptions.RequestException) as e:
             raise StoreRequestException(str(e))
         return self._get_collection_from_response(r)
@@ -167,9 +202,12 @@ class StoreClient(object):
         Internal method to make a DELETE request to the ChRIS store.
         """
         try:
-            requests.delete(url,
-                            auth=(self.username, self.password),
-                            timeout=self.timeout)
+            if self.username or self.password:
+                requests.delete(url,
+                                auth=(self.username, self.password),
+                                timeout=self.timeout)
+            else:
+                requests.delete(url, timeout=self.timeout)
         except (requests.exceptions.Timeout, requests.exceptions.RequestException) as e:
             raise StoreRequestException(str(e))
 
@@ -179,9 +217,12 @@ class StoreClient(object):
         """
         files = {'descriptor_file': descriptor_file}
         try:
-            r = request_method(url, files=files, data=data,
-                               auth=(self.username, self.password),
-                               timeout=self.timeout)
+            if self.username or self.password:
+                r = request_method(url, files=files, data=data,
+                                   auth=(self.username, self.password),
+                                   timeout=self.timeout)
+            else:
+                r = request_method(url, files=files, data=data, timeout=self.timeout)
         except (requests.exceptions.Timeout, requests.exceptions.RequestException) as e:
             raise StoreRequestException(str(e))
         return self._get_collection_from_response(r)
