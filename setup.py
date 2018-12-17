@@ -12,14 +12,14 @@ def readme():
 
 setup(
       name             =   'python-chrisstoreclient',
-      version          =   '0.0.6',
+      version          =   '0.0.7',
       description      =   '(Python) client for the ChRIS store API',
       long_description =   readme(),
       author           =   'FNNDSC',
       author_email     =   'dev@babymri.org',
       url              =   'https://github.com/FNNDSC/python-chrisstoreclient',
       packages         =   ['chrisstoreclient'],
-      install_requires =   ['requests==2.18.4', 'collection-json==0.1.1'],
+      install_requires =   ['requests==2.21.0', 'collection-json==0.1.1'],
       test_suite       =   'nose.collector',
       tests_require    =   ['nose'],
       scripts          =   ['bin/chrisstoreclient'],
