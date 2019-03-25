@@ -40,16 +40,13 @@ parser_add.add_argument('publicrepo', help="Plugin's public repo url")
 
 # create the parser for the "modify" command
 parser_modify = subparsers.add_parser('modify', help='Modify an existing plugin')
-parser_modify.add_argument('name', help="Plugin's name")
+parser_modify.add_argument('id', help="Plugin's id")
 parser_modify.add_argument('dockerimage', help="Plugin's new docker image name")
-parser_modify.add_argument("descriptorfile", type=str,
-                        help="A json descriptor file with the plugin representation")
 parser_modify.add_argument('publicrepo', help="Plugin's new public repo url")
-parser_modify.add_argument('--newname', help="Plugin's new name")
 
 # create the parser for the "remove" command
 parser_remove = subparsers.add_parser('remove', help='Remove an existing plugin')
-parser_remove.add_argument('name', help="Plugin's name")
+parser_remove.add_argument('id', help="Plugin's id")
 
 # Parse the arguments and perform the appropriate action with the store client
 args = parser.parse_args()
@@ -82,11 +79,7 @@ if args.subparser_name == 'add':
         store_client.add_plugin(args.name, args.dockerimage, df, args.publicrepo)
 
 if args.subparser_name == 'modify':
-    new_name = ''
-    if args.newname:
-        new_name = args.newname
-    with open(args.descriptorfile, 'rb') as df:
-        store_client.modify_plugin(args.name, args.dockerimage, df, args.publicrepo, new_name)
+    store_client.modify_plugin(args.id, args.dockerimage, args.publicrepo)
 
 if args.subparser_name == 'remove':
-    store_client.remove_plugin(args.name)
+    store_client.remove_plugin(args.id)

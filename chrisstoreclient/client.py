@@ -18,19 +18,34 @@ class StoreClient(object):
     def __init__(self, store_url, username=None, password=None, timeout=30):
         self.store_url = store_url
         self.store_query_url = store_url + 'search/'
+        self.user_plugins_url = None
         self.username = username
         self.password = password
         self.timeout = timeout
 
-    def get_plugin(self, plugin_name):
+    def get_plugin(self, name, version=None):
         """
         Get a plugin's information (descriptors and parameters) given its ChRIS store
-        name.
+        name and version. If no version is passed then the latest version of the plugin
+        according to creation date is retrieved.
         """
-        search_params = {'name': plugin_name}
+        if version is not None:
+            search_params = {'name_exact': name, 'version': version}
+        else:
+            search_params = {'name_exact_latest': name}
         plugins = self.get_plugins(**search_params)
         if plugins:
-            return plugins[0] # plugin names are unique
+            return plugins[0]  # combination of plugin name and version is unique
+
+    def get_plugin_by_id(self, id):
+        """
+        Get a plugin's information (descriptors and parameters) given its ChRIS store
+        id.
+        """
+        search_params = {'id': id}
+        plugins = self.get_plugins(**search_params)
+        if plugins:
+            return plugins[0]  # plugin ids are unique
 
     def get_plugins(self, **search_params):
         """
@@ -50,34 +65,41 @@ class StoreClient(object):
         Get the data (descriptors and parameters) of the plugins owned by the
         currently authenticated user.
         """
-        collection = self._get(self.store_url)
+        url = self.user_plugins_url
+        if url is None:
+            collection = self._get(self.store_url)
+            url = self._get_link_relation_urls(collection, "user_plugins")[0]
+            self.user_plugins_url = url
+        collection = self._get(url)
         return self._get_items_from_paginated_collections(collection, ['parameters'])
 
     def add_plugin(self, name, dock_image, descriptor_file, public_repo):
         """
         Add a new plugin to the ChRIS store.
         """
+        url = self.user_plugins_url
+        if url is None:
+            collection = self._get(self.store_url)
+            url = self._get_link_relation_urls(collection, "user_plugins")[0]
+            self.user_plugins_url = url
         data = {'name': name, 'dock_image': dock_image, 'public_repo': public_repo}
-        url = self.store_url
         self._post(url, data, descriptor_file)
 
-    def modify_plugin(self, name, dock_image, descriptor_file, public_repo, newname = ''):
+    def modify_plugin(self, id, dock_image, public_repo):
         """
         Modify an existing plugin in the ChRIS store.
         """
-        search_params = {'name': name}
+        search_params = {'id': id}
         collection = self._get(self.store_query_url, search_params)
         url = collection.items[0].href
-        if newname:
-            name = newname
-        data = {'name': name, 'dock_image': dock_image, 'public_repo': public_repo}
-        self._put(url, data, descriptor_file)
+        data = {'dock_image': dock_image, 'public_repo': public_repo}
+        self._put(url, data)
 
-    def remove_plugin(self, name):
+    def remove_plugin(self, id):
         """
         Remove an existing plugin from the ChRIS store.
         """
-        search_params = {'name': name}
+        search_params = {'id': id}
         collection = self._get(self.store_query_url, search_params)
         url = collection.items[0].href
         self._delete(url)
@@ -153,13 +175,13 @@ class StoreClient(object):
             raise StoreRequestException(str(e))
         return self._get_collection_from_response(r)
 
-    def _post(self, url, data, descriptor_file):
+    def _post(self, url, data, descriptor_file=None):
         """
         Internal method to make a POST request to the ChRIS store.
         """
         return self._post_put(requests.post, url, data, descriptor_file)
 
-    def _put(self, url, data, descriptor_file):
+    def _put(self, url, data, descriptor_file=None):
         """
         Internal method to make a PUT request to the ChRIS store.
         """
@@ -179,11 +201,13 @@ class StoreClient(object):
         except (requests.exceptions.Timeout, requests.exceptions.RequestException) as e:
             raise StoreRequestException(str(e))
 
-    def _post_put(self, request_method, url, data, descriptor_file):
+    def _post_put(self, request_method, url, data, descriptor_file=None):
         """
         Internal method to make either a POST or PUT request to the ChRIS store.
         """
-        files = {'descriptor_file': descriptor_file}
+        files = None
+        if descriptor_file is not None:
+            files = {'descriptor_file': descriptor_file}
         try:
             if self.username or self.password:
                 r = request_method(url, files=files, data=data,
