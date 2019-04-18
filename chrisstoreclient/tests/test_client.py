@@ -161,19 +161,26 @@ class StoreClientTests(TestCase):
         """
         with mock.patch.object(client.requests, 'post',
                                return_value=_get(self.store_url)) as requests_post_mock:
-            with io.BytesIO(json.dumps(self.plugin_representation).encode()) as dfile:
-                self.client.add_plugin(self.plugin_name,
-                                       self.plugin_representation['dock_image'],
-                                       dfile,
-                                       self.plugin_representation['public_repo'])
-                data = {'name': self.plugin_name,
-                        'dock_image': self.plugin_representation['dock_image'],
-                        'public_repo': self.plugin_representation['public_repo']}
-                files = {'descriptor_file': dfile}
-                requests_post_mock.assert_called_with(self.user_plugins_url,
-                                                      files=files, data=data,
-                                                      auth=(self.username, self.password),
-                                                      timeout=30)
+            with mock.patch.object(client.requests, 'get',
+                                   side_effect=_get) as requests_get_mock:
+                with io.BytesIO(json.dumps(self.plugin_representation).encode()) as dfile:
+                    self.client.add_plugin(self.plugin_name,
+                                           self.plugin_representation['dock_image'],
+                                           dfile,
+                                           self.plugin_representation['public_repo'])
+                    data = {'name': self.plugin_name,
+                            'dock_image': self.plugin_representation['dock_image'],
+                            'public_repo': self.plugin_representation['public_repo']}
+                    files = {'descriptor_file': dfile}
+                    requests_get_mock.assert_called_with(self.client.store_url,
+                                                         auth=(
+                                                         self.username, self.password),
+                                                         params=None,
+                                                         timeout=30)
+                    requests_post_mock.assert_called_with(self.user_plugins_url,
+                                                          files=files, data=data,
+                                                          auth=(self.username, self.password),
+                                                          timeout=30)
 
     def test_modify_plugin(self):
         """
