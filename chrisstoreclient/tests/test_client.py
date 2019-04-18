@@ -12,7 +12,7 @@ def _get(url, **kwargs):
                          '"href":"http://localhost:8010/api/v1/1/parameters/"},' \
                          '{"rel":"owner","href":"http://localhost:8010/api/v1/users/2/"}],' \
                          '"href":"http://localhost:8010/api/v1/1/",' \
-                         '"data":[{"value":"simplefsapp","name":"name"},' \
+                         '"data":[{"value":1,"name":"id"}, {"value":"simplefsapp","name":"name"},' \
                          '{"value":"2018-05-22T15:49:52.419437Z","name":"creation_date"},' \
                          '{"value":"2018-05-22T15:49:52.419481Z","name":"modification_date"},' \
                          '{"value":"fnndsc/pl-simplefsapp","name":"dock_image"},' \
@@ -32,14 +32,14 @@ def _get(url, **kwargs):
                          '{"value":200,"name":"min_memory_limit"},' \
                          '{"value":2147483647,"name":"max_memory_limit"},' \
                          '{"value":0,"name":"min_gpu_limit"},{"value":0,"name":"max_gpu_limit"}]}],' \
-                         '"links":[{"rel":"user_plugins","href":"http://localhost:8010/api/v1/plugins/"}],' \
+                         '"links":[{"rel":"user_plugins","href":"http://localhost:8010/api/v1/user-plugins/"}],' \
                          '"href":"http://localhost:8010/api/v1/search/?name=simplefsapp",' \
                          '"version":"1.0"}}'
 
     parameter_response_text = '{"collection":{"items":[{"links":[{"rel":"plugin",' \
                                    '"href":"http://localhost:8010/api/v1/1/"}],' \
                                    '"href":"http://localhost:8010/api/v1/parameters/1/",' \
-                                   '"data":[{"value":"dir","name":"name"},{"value":"path","name":"type"},' \
+                                   '"data":[{"value":1,"name":"id"}, {"value":"dir","name":"name"}, {"value":"path","name":"type"},' \
                                    '{"value":true,"name":"optional"},{"value":"./","name":"default"},' \
                                    '{"value":"--dir","name":"flag"},{"value":"store","name":"action"},' \
                                    '{"value":"look up directory","name":"help"}]}],"links":[],' \
@@ -55,11 +55,14 @@ class StoreClientTests(TestCase):
 
     def setUp(self):
         self.store_url = "http://localhost:8010/api/v1/"
+        self.user_plugins_url = self.store_url + 'user-plugins/'
         self.username = "cubeadmin"
         self.password = "cubeadmin1234"
         self.plugin_name = 'simplefsapp'
+        self.plugin_id = 1
         self.client = client.StoreClient(self.store_url, self.username, self.password)
-        self.plugin_representation = {'name': 'simplefsapp',
+        self.plugin_representation = {'id': 1,
+                                      'name': 'simplefsapp',
                                       'creation_date': '2018-05-22T15:49:52.419437Z',
                                       'modification_date': '2018-05-22T15:49:52.419481Z',
                                       'dock_image': 'fnndsc/pl-simplefsapp',
@@ -79,11 +82,11 @@ class StoreClientTests(TestCase):
                                       'min_memory_limit': 200,
                                       'max_memory_limit': 2147483647,
                                       'min_gpu_limit': 0,
-                                      'max_gpu_limit': 0,
-                                      'parameters': [{'name': 'dir', 'type': 'path',
-                                                      'optional': True, 'default': './',
-                                                      'flag': '--dir', 'action': 'store',
-                                                      'help': 'look up directory'}]}
+                                      'max_gpu_limit': 0 }
+        self.parameters_representation = [{'id': 1, 'name': 'dir', 'type': 'path',
+                                           'optional': True, 'default': './',
+                                           'flag': '--dir', 'action': 'store',
+                                           'help': 'look up directory'}]
 
     def test_get_plugin(self):
         """
@@ -91,11 +94,26 @@ class StoreClientTests(TestCase):
         """
         with mock.patch.object(client.requests, 'get',
                                side_effect=_get) as requests_get_mock:
-            pl = self.client.get_plugin(self.plugin_name)
-            self.assertEqual(pl, self.plugin_representation)
+            plugin = self.client.get_plugin(self.plugin_name)
+            self.assertEqual(plugin, self.plugin_representation)
             requests_get_mock.assert_any_call(self.client.store_query_url,
                                               auth=(self.username, self.password),
-                                              params={'name': self.plugin_name}, timeout=30)
+                                              params={'name_exact_latest': self.plugin_name},
+                                              timeout=30)
+
+    def test_get_plugin_parameters(self):
+        """
+        Test whether get_plugin_parameters method can get the list of all plugin parameter
+        representations for the given plugin from the ChRIS store.
+        """
+        with mock.patch.object(client.requests, 'get',
+                               side_effect=_get) as requests_get_mock:
+            result = self.client.get_plugin_parameters(self.plugin_id)
+            self.assertEqual(result['data'], self.parameters_representation)
+            requests_get_mock.assert_any_call(self.store_url + '1/parameters/',
+                                              auth=(self.username, self.password),
+                                              params=None, timeout=30)
+
 
     def test_get_plugins_with_no_args(self):
         """
@@ -104,8 +122,8 @@ class StoreClientTests(TestCase):
         """
         with mock.patch.object(client.requests, 'get',
                                side_effect=_get) as requests_get_mock:
-            plugins = self.client.get_plugins()
-            self.assertEqual(plugins, [self.plugin_representation])
+            result = self.client.get_plugins()
+            self.assertEqual(result['data'], [self.plugin_representation])
             requests_get_mock.assert_any_call(self.store_url,
                                               auth=(self.username, self.password),
                                               params=None, timeout=30)
@@ -117,8 +135,8 @@ class StoreClientTests(TestCase):
         """
         with mock.patch.object(client.requests, 'get',
                                side_effect=_get) as requests_get_mock:
-            plugins = self.client.get_plugins(name=self.plugin_name)
-            self.assertEqual(plugins, [self.plugin_representation])
+            result = self.client.get_plugins({'name': self.plugin_name})
+            self.assertEqual(result['data'], [self.plugin_representation])
             requests_get_mock.assert_any_call(self.client.store_query_url,
                                               auth=(self.username, self.password),
                                               params={'name': self.plugin_name}, timeout=30)
@@ -130,8 +148,8 @@ class StoreClientTests(TestCase):
         """
         with mock.patch.object(client.requests, 'get',
                                side_effect=_get) as requests_get_mock:
-            plugins = self.client.get_authenticated_user_plugins()
-            self.assertEqual(plugins, [self.plugin_representation])
+            result = self.client.get_authenticated_user_plugins()
+            self.assertEqual(result['data'], [self.plugin_representation])
             requests_get_mock.assert_any_call(self.store_url,
                                               auth=(self.username, self.password),
                                               params=None, timeout=30)
@@ -152,7 +170,7 @@ class StoreClientTests(TestCase):
                         'dock_image': self.plugin_representation['dock_image'],
                         'public_repo': self.plugin_representation['public_repo']}
                 files = {'descriptor_file': dfile}
-                requests_post_mock.assert_called_with(self.store_url,
+                requests_post_mock.assert_called_with(self.user_plugins_url,
                                                       files=files, data=data,
                                                       auth=(self.username, self.password),
                                                       timeout=30)
@@ -166,23 +184,20 @@ class StoreClientTests(TestCase):
                                return_value=_get(self.store_url)) as requests_put_mock:
             with mock.patch.object(client.requests, 'get',
                                    side_effect=_get) as requests_get_mock:
-                with io.BytesIO(json.dumps(self.plugin_representation).encode()) as dfile:
-                    self.client.modify_plugin(self.plugin_name,
-                                              self.plugin_representation['dock_image'],
-                                              dfile,
-                                              self.plugin_representation['public_repo'])
-                    data = {'name': self.plugin_name,
-                            'dock_image': self.plugin_representation['dock_image'],
-                            'public_repo': self.plugin_representation['public_repo']}
-                    files = {'descriptor_file': dfile}
-                    requests_get_mock.assert_called_with(self.client.store_query_url,
-                                                         auth=(self.username, self.password),
-                                                         params={'name': self.plugin_name},
-                                                         timeout=30)
-                    requests_put_mock.assert_called_with(self.store_url + '1/',
-                                                         files=files, data=data,
-                                                         auth=(self.username, self.password),
-                                                         timeout=30)
+                self.client.modify_plugin(self.plugin_id,
+                                          self.plugin_representation['dock_image'],
+                                          self.plugin_representation['public_repo'])
+                data = {'dock_image': self.plugin_representation['dock_image'],
+                        'public_repo': self.plugin_representation['public_repo']}
+                requests_get_mock.assert_called_with(self.client.store_query_url,
+                                                     auth=(self.username, self.password),
+                                                     params={'id': self.plugin_id},
+                                                     timeout=30)
+                requests_put_mock.assert_called_with(self.store_url + '1/',
+                                                     data=data,
+                                                     auth=(self.username, self.password),
+                                                     files=None,
+                                                     timeout=30)
 
     def test_remove_plugin(self):
         """
@@ -192,10 +207,10 @@ class StoreClientTests(TestCase):
         with mock.patch.object(client.requests, 'delete') as requests_delete_mock:
             with mock.patch.object(client.requests, 'get',
                                    side_effect=_get) as requests_get_mock:
-                self.client.remove_plugin(self.plugin_name)
+                self.client.remove_plugin(self.plugin_id)
                 requests_get_mock.assert_called_with(self.client.store_query_url,
                                                      auth=(self.username, self.password),
-                                                     params={'name': self.plugin_name},
+                                                     params={'id': self.plugin_id},
                                                      timeout=30)
                 requests_delete_mock.assert_called_with(self.store_url + '1/',
                                                         auth=(self.username, self.password),
