@@ -57,10 +57,10 @@ if args.subparser_name == 'list':
     for param_str in args.queryparameters:
         param_tuple = param_str.partition('==')
         search_params[param_tuple[0]] = param_tuple[2]
-    plugins = store_client.get_plugins(**search_params)
+    result = store_client.get_plugins(search_params)
     print('')
     i = 0
-    for plg in plugins:
+    for plg in result['data']:
         i += 1
         print('[%i] ' % i)
         if args.verbose:

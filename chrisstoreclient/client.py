@@ -4,6 +4,7 @@ An item in a collection is represented by a dictionary. A collection of items is
 represented by a list of dictionaries.
 """
 
+import json
 import requests
 from collection_json import Collection
 
@@ -22,6 +23,7 @@ class StoreClient(object):
         self.username = username
         self.password = password
         self.timeout = timeout
+        self.content_type = 'application/vnd.collection+json';
 
     def get_plugins(self, search_params=None):
         """
@@ -152,14 +154,16 @@ class StoreClient(object):
         """
         Internal method to make a GET request to the ChRIS store.
         """
+        headers = {'Accept': self.content_type}
         try:
             if self.username or self.password:
                 r = requests.get(url,
                                  params=params,
                                  auth=(self.username, self.password),
-                                 timeout=self.timeout)
+                                 timeout=self.timeout, headers=headers)
             else:
-                r = requests.get(url, params=params, timeout=self.timeout)
+                r = requests.get(url, params=params, timeout=self.timeout,
+                                 headers=headers)
         except (requests.exceptions.Timeout, requests.exceptions.RequestException) as e:
             raise StoreRequestException(str(e))
         return self._get_collection_from_response(r)
@@ -182,11 +186,11 @@ class StoreClient(object):
         """
         try:
             if self.username or self.password:
-                requests.delete(url,
+                r = requests.delete(url,
                                 auth=(self.username, self.password),
                                 timeout=self.timeout)
             else:
-                requests.delete(url, timeout=self.timeout)
+               r = requests.delete(url, timeout=self.timeout)
         except (requests.exceptions.Timeout, requests.exceptions.RequestException) as e:
             raise StoreRequestException(str(e))
 
@@ -194,16 +198,22 @@ class StoreClient(object):
         """
         Internal method to make either a POST or PUT request to the ChRIS store.
         """
-        files = None
-        if descriptor_file is not None:
+        if descriptor_file is None:
+            headers = {'Content-Type': self.content_type, 'Accept': self.content_type}
+            files = None
+            data = json.dumps(self._makeTemplate(data))
+        else:
+            # this is a multipart request
+            headers = None
             files = {'descriptor_file': descriptor_file}
         try:
             if self.username or self.password:
                 r = request_method(url, files=files, data=data,
                                    auth=(self.username, self.password),
-                                   timeout=self.timeout)
+                                   timeout=self.timeout, headers=headers)
             else:
-                r = request_method(url, files=files, data=data, timeout=self.timeout)
+                r = request_method(url, files=files, data=data, timeout=self.timeout,
+                                   headers=headers)
         except (requests.exceptions.Timeout, requests.exceptions.RequestException) as e:
             raise StoreRequestException(str(e))
         return self._get_collection_from_response(r)
@@ -225,3 +235,14 @@ class StoreClient(object):
         item object.
         """
         return [link.href for link in obj.links if link.rel == relation_name]
+
+    @staticmethod
+    def _makeTemplate(descriptors_dict):
+        """
+        Internal method to make a Collection+Json template from a regular dictionary whose
+        properties are the item descriptors.
+        """
+        template = {'data': []}
+        for key in descriptors_dict:
+            template['data'].append({'name': key, 'value': descriptors_dict[key]})
+        return {'template': template}
