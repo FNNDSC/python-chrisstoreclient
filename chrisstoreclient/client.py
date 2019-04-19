@@ -23,7 +23,7 @@ class StoreClient(object):
         self.username = username
         self.password = password
         self.timeout = timeout
-        self.content_type = 'application/vnd.collection+json';
+        self.content_type = 'application/vnd.collection+json'
 
     def get_plugins(self, search_params=None):
         """
@@ -154,7 +154,7 @@ class StoreClient(object):
         """
         Internal method to make a GET request to the ChRIS store.
         """
-        headers = {'Accept': self.content_type}
+        headers = {'Content-Type': self.content_type, 'Accept': self.content_type}
         try:
             if self.username or self.password:
                 r = requests.get(url,

@@ -61,6 +61,8 @@ class StoreClientTests(TestCase):
         self.plugin_name = 'simplefsapp'
         self.plugin_id = 1
         self.client = client.StoreClient(self.store_url, self.username, self.password)
+        self.headers = {'Content-Type': self.client.content_type,
+                        'Accept': self.client.content_type}
         self.plugin_representation = {'id': 1,
                                       'name': 'simplefsapp',
                                       'creation_date': '2018-05-22T15:49:52.419437Z',
@@ -98,6 +100,7 @@ class StoreClientTests(TestCase):
             self.assertEqual(plugin, self.plugin_representation)
             requests_get_mock.assert_any_call(self.client.store_query_url,
                                               auth=(self.username, self.password),
+                                              headers=self.headers,
                                               params={'name_exact_latest': self.plugin_name},
                                               timeout=30)
 
@@ -112,6 +115,7 @@ class StoreClientTests(TestCase):
             self.assertEqual(result['data'], self.parameters_representation)
             requests_get_mock.assert_any_call(self.store_url + '1/parameters/',
                                               auth=(self.username, self.password),
+                                              headers=self.headers,
                                               params=None, timeout=30)
 
 
@@ -126,6 +130,7 @@ class StoreClientTests(TestCase):
             self.assertEqual(result['data'], [self.plugin_representation])
             requests_get_mock.assert_any_call(self.store_url,
                                               auth=(self.username, self.password),
+                                              headers=self.headers,
                                               params=None, timeout=30)
 
     def test_get_plugins_with_search_args(self):
@@ -139,6 +144,7 @@ class StoreClientTests(TestCase):
             self.assertEqual(result['data'], [self.plugin_representation])
             requests_get_mock.assert_any_call(self.client.store_query_url,
                                               auth=(self.username, self.password),
+                                              headers=self.headers,
                                               params={'name': self.plugin_name}, timeout=30)
 
     def test_get_authenticated_user_plugins(self):
@@ -152,6 +158,7 @@ class StoreClientTests(TestCase):
             self.assertEqual(result['data'], [self.plugin_representation])
             requests_get_mock.assert_any_call(self.store_url,
                                               auth=(self.username, self.password),
+                                              headers=self.headers,
                                               params=None, timeout=30)
 
     def test_add_plugin(self):
@@ -175,11 +182,13 @@ class StoreClientTests(TestCase):
                     requests_get_mock.assert_called_with(self.client.store_url,
                                                          auth=(
                                                          self.username, self.password),
+                                                         headers=self.headers,
                                                          params=None,
                                                          timeout=30)
                     requests_post_mock.assert_called_with(self.user_plugins_url,
                                                           files=files, data=data,
                                                           auth=(self.username, self.password),
+                                                          headers = None,
                                                           timeout=30)
 
     def test_modify_plugin(self):
@@ -198,12 +207,15 @@ class StoreClientTests(TestCase):
                         'public_repo': self.plugin_representation['public_repo']}
                 requests_get_mock.assert_called_with(self.client.store_query_url,
                                                      auth=(self.username, self.password),
+                                                     headers=self.headers,
                                                      params={'id': self.plugin_id},
                                                      timeout=30)
+                data = json.dumps(self.client._makeTemplate(data))
                 requests_put_mock.assert_called_with(self.store_url + '1/',
                                                      data=data,
                                                      auth=(self.username, self.password),
                                                      files=None,
+                                                     headers=self.headers,
                                                      timeout=30)
 
     def test_remove_plugin(self):
@@ -217,6 +229,7 @@ class StoreClientTests(TestCase):
                 self.client.remove_plugin(self.plugin_id)
                 requests_get_mock.assert_called_with(self.client.store_query_url,
                                                      auth=(self.username, self.password),
+                                                     headers=self.headers,
                                                      params={'id': self.plugin_id},
                                                      timeout=30)
                 requests_delete_mock.assert_called_with(self.store_url + '1/',
