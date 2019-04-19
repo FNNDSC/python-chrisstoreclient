@@ -27,7 +27,9 @@ subparsers = parser.add_subparsers(dest='subparser_name', title='subcommands',
 # create the parser for the "list" command
 parser_list = subparsers.add_parser('list', help='List plugins in the store')
 parser_list.add_argument('queryparameters', nargs='*')
-parser_list.add_argument('-v', '--verbose', help="increase output verbosity",
+parser_list.add_argument('-v', '--verbose',
+                         help="increase output verbosity by also including the plugin's"
+                              " CLI parameters",
                          action='store_true')
 
 # create the parser for the "add" command
@@ -63,15 +65,19 @@ if args.subparser_name == 'list':
     for plg in result['data']:
         i += 1
         print('[%i] ' % i)
+        for descriptor in plg:
+            print('%s: %s' % (descriptor, plg[descriptor]))
         if args.verbose:
-            for descriptor in plg:
-                print('%s: %s' % (descriptor, plg[descriptor]))
-        else:
-            description = 'No description'
-            if 'description' in plg:
-                description = plg['description']
-            print('name: %s' % plg['name'])
-            print('description: %s' % description)
+            parameters = []
+            offset = 0
+            limit = 30
+            while True:
+                result = store_client.get_plugin_parameters(plg['id'], {'limit': limit,
+                                                                        'offset': offset})
+                parameters.extend(result['data'])
+                offset += limit
+                if not result['hasNextPage']: break
+            print('parameters: %s' % parameters)
         print('')
 
 if args.subparser_name == 'add':
