@@ -76,7 +76,7 @@ class StoreClient(object):
         if parameters_links:
             collection = self._get(parameters_links[0], params) # there can only be a single parameters link
             return self.get_data_from_collection(collection)
-        return {'data': [], 'hasNextPage': False, 'hasPreviousPage': False}
+        return {'data': [], 'hasNextPage': False, 'hasPreviousPage': False, 'total': 0}
 
     def get_authenticated_user_plugins(self):
         """
