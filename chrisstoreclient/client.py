@@ -95,7 +95,7 @@ class StoreClient(object):
         """
         Get the result data dictionary from a collection object.
         """
-        result = {'data': [], 'hasNextPage': False, 'hasPreviousPage': False}
+        result = {'data': [], 'hasNextPage': False, 'hasPreviousPage': False, 'total': 0}
         for item in collection.items:
             item_dict = self._get_item_descriptors(item)
             result['data'].append(item_dict)
@@ -103,6 +103,8 @@ class StoreClient(object):
             result['hasNextPage'] = True
         if self._get_link_relation_urls(collection, 'previous'):
             result['hasPreviousPage'] = True
+        if hasattr(collection, 'total'):
+            result['total'] = collection.total
         return result
 
     def add_plugin(self, name, dock_image, descriptor_file, public_repo):
@@ -223,9 +225,13 @@ class StoreClient(object):
         """
         Internal method to get the collection object from a response object.
         """
-        collection = Collection.from_json(response.text)
+        content = json.loads(response.text)
+        total = content['collection'].pop('total', None)
+        collection = Collection.from_json(json.dumps(content))
         if collection.error:
             raise StoreRequestException(collection.error.message)
+        if total is not None:
+            collection.total = total
         return collection
 
     @staticmethod
