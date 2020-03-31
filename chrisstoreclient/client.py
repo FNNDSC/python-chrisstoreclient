@@ -31,9 +31,9 @@ class StoreClient(object):
         If no search parameters is given then get the default first page.
         """
         if search_params:
-            collection = self._get(self.store_query_url, search_params)
+            collection = self.get(self.store_query_url, search_params)
         else:
-            collection = self._get(self.store_url)
+            collection = self.get(self.store_url)
         return self.get_data_from_collection(collection)
 
     def get_plugin(self, name, version=None):
@@ -69,12 +69,12 @@ class StoreClient(object):
         """
         Get a plugin's paginated parameters given its ChRIS store id.
         """
-        collection = self._get(self.store_query_url, {'id': plugin_id})
+        collection = self.get(self.store_query_url, {'id': plugin_id})
         if len(collection.items) == 0:
             raise StoreRequestException('Could not find plugin with id: %s.' % plugin_id)
         parameters_links = self._get_link_relation_urls(collection.items[0], 'parameters')
         if parameters_links:
-            collection = self._get(parameters_links[0], params) # there can only be a single parameters link
+            collection = self.get(parameters_links[0], params) # there can only be a single parameters link
             return self.get_data_from_collection(collection)
         return {'data': [], 'hasNextPage': False, 'hasPreviousPage': False, 'total': 0}
 
@@ -85,10 +85,10 @@ class StoreClient(object):
         """
         url = self.user_plugins_url
         if url is None:
-            collection = self._get(self.store_url)
+            collection = self.get(self.store_url)
             url = self._get_link_relation_urls(collection, "user_plugins")[0]
             self.user_plugins_url = url
-        collection = self._get(url)
+        collection = self.get(url)
         return self.get_data_from_collection(collection)
 
     def get_data_from_collection(self, collection):
@@ -113,11 +113,11 @@ class StoreClient(object):
         """
         url = self.user_plugins_url
         if url is None:
-            collection = self._get(self.store_url)
+            collection = self.get(self.store_url)
             url = self._get_link_relation_urls(collection, "user_plugins")[0]
             self.user_plugins_url = url
         data = {'name': name, 'dock_image': dock_image, 'public_repo': public_repo}
-        collection = self._post(url, data, descriptor_file)
+        collection = self.post(url, data, descriptor_file)
         result = self.get_data_from_collection(collection)
         return result['data'][0]
 
@@ -126,10 +126,10 @@ class StoreClient(object):
         Modify an existing plugin in the ChRIS store.
         """
         search_params = {'id': id}
-        collection = self._get(self.store_query_url, search_params)
+        collection = self.get(self.store_query_url, search_params)
         url = collection.items[0].href
         data = {'dock_image': dock_image, 'public_repo': public_repo}
-        collection = self._put(url, data)
+        collection = self.put(url, data)
         result = self.get_data_from_collection(collection)
         return result['data'][0]
 
@@ -138,9 +138,9 @@ class StoreClient(object):
         Remove an existing plugin from the ChRIS store.
         """
         search_params = {'id': id}
-        collection = self._get(self.store_query_url, search_params)
+        collection = self.get(self.store_query_url, search_params)
         url = collection.items[0].href
-        self._delete(url)
+        self.delete(url)
 
     def _get_item_descriptors(self, item):
         """
@@ -152,7 +152,7 @@ class StoreClient(object):
             item_dict[descriptor.name] = descriptor.value
         return item_dict
 
-    def _get(self, url, params=None):
+    def get(self, url, params=None):
         """
         Internal method to make a GET request to the ChRIS store.
         """
@@ -170,19 +170,19 @@ class StoreClient(object):
             raise StoreRequestException(str(e))
         return self._get_collection_from_response(r)
 
-    def _post(self, url, data, descriptor_file=None):
+    def post(self, url, data, descriptor_file=None):
         """
         Internal method to make a POST request to the ChRIS store.
         """
         return self._post_put(requests.post, url, data, descriptor_file)
 
-    def _put(self, url, data, descriptor_file=None):
+    def put(self, url, data, descriptor_file=None):
         """
         Internal method to make a PUT request to the ChRIS store.
         """
         return self._post_put(requests.put, url, data, descriptor_file)
 
-    def _delete(self, url):
+    def delete(self, url):
         """
         Internal method to make a DELETE request to the ChRIS store.
         """
