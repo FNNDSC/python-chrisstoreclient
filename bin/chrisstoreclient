@@ -42,9 +42,9 @@ parser_add.add_argument('publicrepo', help="Plugin's public repo url")
 
 # create the parser for the "modify" command
 parser_modify = subparsers.add_parser('modify', help='Modify an existing plugin')
-parser_modify.add_argument('id', help="Plugin's id")
-parser_modify.add_argument('dockerimage', help="Plugin's new docker image name")
+parser_modify.add_argument('name', help="Plugin's name")
 parser_modify.add_argument('publicrepo', help="Plugin's new public repo url")
+parser_modify.add_argument('--newowner', help="Username of the new owner")
 
 # create the parser for the "remove" command
 parser_remove = subparsers.add_parser('remove', help='Remove an existing plugin')
@@ -85,7 +85,7 @@ if args.subparser_name == 'add':
         store_client.add_plugin(args.name, args.dockerimage, df, args.publicrepo)
 
 if args.subparser_name == 'modify':
-    store_client.modify_plugin(args.id, args.dockerimage, args.publicrepo)
+    store_client.modify_plugin_meta(args.name, args.publicrepo, args.newowner)
 
 if args.subparser_name == 'remove':
     store_client.remove_plugin(args.id)

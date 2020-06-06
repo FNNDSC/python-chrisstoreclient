@@ -18,22 +18,76 @@ class StoreClient(object):
 
     def __init__(self, store_url, username=None, password=None, timeout=30):
         self.store_url = store_url
-        self.store_query_url = store_url + 'search/'
-        self.user_plugins_url = None
         self.username = username
         self.password = password
         self.timeout = timeout
         self.content_type = 'application/vnd.collection+json'
+
+        # urls of the high level API resources
+        self._urls = {'plugin_metas': self.store_url,  'plugins': '', 'pipelines': '',
+                      'plugin_stars': ''}
+
+    def get_url(self, resource_name):
+        if resource_name not in self._urls:
+            raise NameError('Could not find resource %s.' % resource_name)
+        if not self._urls[resource_name]:
+            collection = self.get(self.store_url)
+            self._urls = {'plugin_metas': self.store_url,
+                          'plugins': self._get_link_relation_urls(collection,
+                                                                  'plugins')[0],
+                          'pipelines': self._get_link_relation_urls(collection,
+                                                                    'pipelines')[0],
+                          'plugin_stars': self._get_link_relation_urls(collection,
+                                                                       'plugin_stars')[0]
+                          }
+        return self._urls[resource_name]
+
+    def get_plugin_metas(self, search_params=None):
+        """
+        Get a paginated list of plugin metas (descriptors) given query search parameters.
+        If no search parameters is given then get the default first page.
+        """
+        url = self.get_url('plugin_metas')
+        query_url = url + 'search/'
+        if search_params:
+            collection = self.get(query_url, search_params)
+        else:
+            collection = self.get(url)
+        return self.get_data_from_collection(collection)
+
+    def get_plugin_meta(self, name):
+        """
+        Get a plugin meta's data (descriptors) given its ChRIS store name.
+        """
+        search_params = {'name_exact': name}
+        result = self.get_plugin_metas(search_params)
+        if result['data']:
+            return result['data'][0]  # name is unique
+        else:
+            raise StoreRequestException('Could not find plugin meta with name %s.' % name)
+
+    def get_plugin_meta_by_id(self, id):
+        """
+        Get a plugin meta's data (descriptors) given its ChRIS store id.
+        """
+        search_params = {'id': id}
+        result = self.get_plugin_metas(search_params)
+        if result['data']:
+            return result['data'][0]  # ids are unique
+        else:
+            raise StoreRequestException('Could not find plugin meta with id %s' % id)
 
     def get_plugins(self, search_params=None):
         """
         Get a paginated list of plugin data (descriptors) given query search parameters.
         If no search parameters is given then get the default first page.
         """
+        url = self.get_url('plugins')
+        query_url = url + 'search/'
         if search_params:
-            collection = self.get(self.store_query_url, search_params)
+            collection = self.get(query_url, search_params)
         else:
-            collection = self.get(self.store_url)
+            collection = self.get(url)
         return self.get_data_from_collection(collection)
 
     def get_plugin(self, name, version=None):
@@ -69,27 +123,16 @@ class StoreClient(object):
         """
         Get a plugin's paginated parameters given its ChRIS store id.
         """
-        collection = self.get(self.store_query_url, {'id': plugin_id})
+        url = self.get_url('plugins')
+        query_url = url + 'search/'
+        collection = self.get(query_url, {'id': plugin_id})
         if len(collection.items) == 0:
             raise StoreRequestException('Could not find plugin with id: %s.' % plugin_id)
         parameters_links = self._get_link_relation_urls(collection.items[0], 'parameters')
         if parameters_links:
-            collection = self.get(parameters_links[0], params) # there can only be a single parameters link
+            collection = self.get(parameters_links[0], params)  # there can only be a single parameters link
             return self.get_data_from_collection(collection)
         return {'data': [], 'hasNextPage': False, 'hasPreviousPage': False, 'total': 0}
-
-    def get_authenticated_user_plugins(self):
-        """
-        Get the data (descriptors) of the plugins owned by the currently authenticated
-        user.
-        """
-        url = self.user_plugins_url
-        if url is None:
-            collection = self.get(self.store_url)
-            url = self._get_link_relation_urls(collection, "user_plugins")[0]
-            self.user_plugins_url = url
-        collection = self.get(url)
-        return self.get_data_from_collection(collection)
 
     def get_data_from_collection(self, collection):
         """
@@ -111,25 +154,9 @@ class StoreClient(object):
         """
         Add a new plugin to the ChRIS store.
         """
-        url = self.user_plugins_url
-        if url is None:
-            collection = self.get(self.store_url)
-            url = self._get_link_relation_urls(collection, "user_plugins")[0]
-            self.user_plugins_url = url
+        url = self.get_url('plugins')
         data = {'name': name, 'dock_image': dock_image, 'public_repo': public_repo}
         collection = self.post(url, data, descriptor_file)
-        result = self.get_data_from_collection(collection)
-        return result['data'][0]
-
-    def modify_plugin(self, id, dock_image, public_repo):
-        """
-        Modify an existing plugin in the ChRIS store.
-        """
-        search_params = {'id': id}
-        collection = self.get(self.store_query_url, search_params)
-        url = collection.items[0].href
-        data = {'dock_image': dock_image, 'public_repo': public_repo}
-        collection = self.put(url, data)
         result = self.get_data_from_collection(collection)
         return result['data'][0]
 
@@ -137,8 +164,37 @@ class StoreClient(object):
         """
         Remove an existing plugin from the ChRIS store.
         """
+        url = self.get_url('plugins')
+        query_url = url + 'search/'
         search_params = {'id': id}
-        collection = self.get(self.store_query_url, search_params)
+        collection = self.get(query_url, search_params)
+        url = collection.items[0].href
+        self.delete(url)
+
+    def modify_plugin_meta(self, name, public_repo, new_owner=None):
+        """
+        Modify an existing plugin meta in the ChRIS store.
+        """
+        url = self.get_url('plugin_metas')
+        query_url = url + 'search/'
+        search_params = {'name_exact': name}
+        collection = self.get(query_url, search_params)
+        url = collection.items[0].href
+        data = {'public_repo': public_repo}
+        if new_owner:
+            data['new_owner'] = new_owner
+        collection = self.put(url, data)
+        result = self.get_data_from_collection(collection)
+        return result['data'][0]
+
+    def remove_plugin_meta(self, id):
+        """
+        Remove an existing plugin from the ChRIS store.
+        """
+        url = self.get_url('plugin_metas')
+        query_url = url + 'search/'
+        search_params = {'id': id}
+        collection = self.get(query_url, search_params)
         url = collection.items[0].href
         self.delete(url)
 
@@ -189,8 +245,8 @@ class StoreClient(object):
         try:
             if self.username or self.password:
                 r = requests.delete(url,
-                                auth=(self.username, self.password),
-                                timeout=self.timeout)
+                                    auth=(self.username, self.password),
+                                    timeout=self.timeout)
             else:
                r = requests.delete(url, timeout=self.timeout)
         except (requests.exceptions.Timeout, requests.exceptions.RequestException) as e:
